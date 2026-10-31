@@ -5,7 +5,7 @@ import time
 
 import streamlit as st
 
-from bank_simulation import OPEN_MINUTES, SimulationResult, simulate_bank
+from bank_simulation import OPEN_MINUTES, TELLER_COUNT, SimulationResult, simulate_bank
 
 
 st.set_page_config(page_title="Community Bank Simulation", layout="wide")
@@ -54,8 +54,8 @@ def draw_branch(result: SimulationResult, minute: float) -> str:
 
     teller_customers = {customer.teller: customer for customer in active}
     teller_drawings = []
-    for teller in range(2):
-        center = 260 + teller * 280
+    for teller in range(TELLER_COUNT):
+        center = 250 + teller * 150
         teller_drawings.append(
             f'<rect x="{center - 45}" y="104" width="90" height="52" rx="8" '
             f'fill="#087e82"/><text x="{center}" y="136" class="teller-label">'
@@ -102,7 +102,7 @@ def draw_branch(result: SimulationResult, minute: float) -> str:
         <text x="400" y="350" class="title" text-anchor="middle"
               style="font-size:15px">Minute {minute:.1f} of {OPEN_MINUTES}</text>
         <text x="400" y="374" class="label" text-anchor="middle">
-          Waiting: {len(queue)}  |  Tellers busy: {len(active)}/2
+          Waiting: {len(queue)}  |  Tellers busy: {len(active)}/{TELLER_COUNT}
         </text>
       </svg>
     </div>
@@ -131,7 +131,7 @@ if "bank_speed" not in st.session_state:
 st.title("Community Bank — Branch Simulation")
 st.caption(
     "Random arrivals every 3 minutes on average · Exponential service time "
-    "of 4 minutes · Two tellers · One first-come, first-served queue"
+    f"of 4 minutes · {TELLER_COUNT} tellers · One first-come, first-served queue"
 )
 
 
@@ -189,7 +189,7 @@ def simulation_panel() -> None:
         st.session_state.bank_started_at = time.monotonic()
         st.session_state.bank_speed = speed
 
-    teller_columns = st.columns(2)
+    teller_columns = st.columns(TELLER_COUNT)
     for index, column in enumerate(teller_columns):
         busy = elapsed_busy[index] / OPEN_MINUTES * 100
         column.progress(

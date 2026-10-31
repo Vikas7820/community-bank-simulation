@@ -4,6 +4,15 @@ from bank_simulation import OPEN_MINUTES, TELLER_COUNT, simulate_bank
 
 
 class BankSimulationTests(unittest.TestCase):
+    def test_simulation_uses_three_tellers(self):
+        result = simulate_bank(seed=17)
+        self.assertEqual(TELLER_COUNT, 3)
+        self.assertEqual(len(result.teller_busy_minutes), 3)
+        self.assertEqual(
+            {customer.teller for customer in result.customers},
+            {0, 1, 2},
+        )
+
     def test_seed_makes_the_simulation_reproducible(self):
         first = simulate_bank(seed=17)
         second = simulate_bank(seed=17)
@@ -35,7 +44,10 @@ class BankSimulationTests(unittest.TestCase):
 
     def test_teller_busy_time_grows_only_as_service_is_performed(self):
         result = simulate_bank(seed=17)
-        self.assertEqual(result.teller_busy_minutes_through(0), (0.0, 0.0))
+        self.assertEqual(
+            result.teller_busy_minutes_through(0),
+            (0.0,) * TELLER_COUNT,
+        )
         self.assertEqual(
             result.teller_busy_minutes_through(OPEN_MINUTES),
             result.teller_busy_minutes,
