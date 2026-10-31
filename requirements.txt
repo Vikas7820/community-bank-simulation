@@ -1,0 +1,2 @@
+streamlit>=1.37.0
+simpy>=4.1.1
