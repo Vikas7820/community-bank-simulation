@@ -1,17 +1,33 @@
 import unittest
 
-from bank_simulation import OPEN_MINUTES, TELLER_COUNT, simulate_bank
+from bank_simulation import (
+    OPEN_MINUTES,
+    TELLER_COUNT,
+    arrival_times_for_day,
+    simulate_bank,
+)
 
 
 class BankSimulationTests(unittest.TestCase):
     def test_simulation_uses_three_tellers(self):
-        result = simulate_bank(seed=17)
+        result = simulate_bank(seed=17, teller_count=3)
         self.assertEqual(TELLER_COUNT, 3)
         self.assertEqual(len(result.teller_busy_minutes), 3)
         self.assertEqual(
             {customer.teller for customer in result.customers},
             {0, 1, 2},
         )
+
+    def test_arrival_times_are_same_for_different_teller_counts(self):
+        two_tellers = simulate_bank(seed=1, teller_count=2)
+        three_tellers = simulate_bank(seed=1, teller_count=3)
+        self.assertEqual(two_tellers.arrival_times, three_tellers.arrival_times)
+
+    def test_different_january_days_have_different_arrival_times(self):
+        january_first = arrival_times_for_day(1)
+        january_thirty_first = arrival_times_for_day(31)
+        self.assertNotEqual(january_first, january_thirty_first)
+        self.assertEqual(january_first, arrival_times_for_day(1))
 
     def test_seed_makes_the_simulation_reproducible(self):
         first = simulate_bank(seed=17)

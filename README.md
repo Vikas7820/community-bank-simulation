@@ -20,10 +20,13 @@ streamlit run app.py
 ## Bank simulation
 
 The Community Bank app simulates an eight-hour day with random customer arrivals,
-exponential service times, three tellers, and one shared first-come, first-served
-queue. The animated view includes pause, resume, restart, and playback-speed
-controls, along with average and worst wait, current queue length, and teller
-busy percentages.
+exponential service times, a choice of two or three tellers, and one shared
+first-come, first-served queue. Choose any date in January: each date has its own
+repeatable arrival schedule, while changing teller count keeps that day's arrivals
+identical. A first-hour chart compares January 1 and January 31, including the
+same January 1 arrivals with both teller counts. The animated view includes
+pause, resume, restart, and playback-speed controls, along with average and worst
+wait, current queue length, and teller busy percentages.
 
 Run the bank simulation:
 

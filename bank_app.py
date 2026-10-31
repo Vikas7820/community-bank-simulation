@@ -3,9 +3,15 @@ from __future__ import annotations
 import html
 import time
 
+import plotly.graph_objects as go
 import streamlit as st
 
-from bank_simulation import OPEN_MINUTES, TELLER_COUNT, SimulationResult, simulate_bank
+from bank_simulation import (
+    OPEN_MINUTES,
+    SimulationResult,
+    arrival_times_for_day,
+    simulate_bank,
+)
 
 
 st.set_page_config(page_title="Community Bank Simulation", layout="wide")
@@ -28,10 +34,47 @@ st.markdown(
 )
 
 
-def get_result() -> SimulationResult:
-    if "bank_result" not in st.session_state:
-        st.session_state.bank_result = simulate_bank()
-    return st.session_state.bank_result
+def arrival_comparison_chart() -> go.Figure:
+    comparisons = (
+        ("January 1 · 2 tellers", 1, "#1f77b4"),
+        ("January 31 · 2 tellers", 31, "#d46a77"),
+        ("January 1 · 3 tellers", 1, "#168b78"),
+    )
+    figure = go.Figure()
+    for label, day, color in comparisons:
+        first_hour = [
+            minute for minute in arrival_times_for_day(day) if minute <= 60
+        ]
+        figure.add_trace(
+            go.Scatter(
+                x=first_hour,
+                y=[label] * len(first_hour),
+                mode="markers",
+                marker=dict(
+                    symbol="line-ns",
+                    size=16,
+                    color=color,
+                    line=dict(width=2, color=color),
+                ),
+                name=label,
+                hovertemplate=f"{label}<br>Minute %{{x:.1f}}<extra></extra>",
+            )
+        )
+
+    figure.update_layout(
+        title="First-hour customer arrivals",
+        xaxis=dict(title="Minute of the day", range=[0, 60], dtick=15),
+        yaxis=dict(title="", categoryorder="array", categoryarray=[
+            "January 1 · 3 tellers",
+            "January 31 · 2 tellers",
+            "January 1 · 2 tellers",
+        ]),
+        height=270,
+        margin=dict(l=20, r=20, t=55, b=35),
+        showlegend=False,
+        template="plotly_white",
+    )
+    return figure
 
 
 def draw_branch(result: SimulationResult, minute: float) -> str:
@@ -54,8 +97,9 @@ def draw_branch(result: SimulationResult, minute: float) -> str:
 
     teller_customers = {customer.teller: customer for customer in active}
     teller_drawings = []
-    for teller in range(TELLER_COUNT):
-        center = 250 + teller * 150
+    teller_count = len(result.teller_busy_minutes)
+    for teller in range(teller_count):
+        center = 400 + (teller - (teller_count - 1) / 2) * 150
         teller_drawings.append(
             f'<rect x="{center - 45}" y="104" width="90" height="52" rx="8" '
             f'fill="#087e82"/><text x="{center}" y="136" class="teller-label">'
@@ -102,7 +146,7 @@ def draw_branch(result: SimulationResult, minute: float) -> str:
         <text x="400" y="350" class="title" text-anchor="middle"
               style="font-size:15px">Minute {minute:.1f} of {OPEN_MINUTES}</text>
         <text x="400" y="374" class="label" text-anchor="middle">
-          Waiting: {len(queue)}  |  Tellers busy: {len(active)}/{TELLER_COUNT}
+          Waiting: {len(queue)}  |  Tellers busy: {len(active)}/{teller_count}
         </text>
       </svg>
     </div>
@@ -122,16 +166,42 @@ def reset_clock() -> None:
     st.session_state.bank_paused = False
 
 
-result = get_result()
-if "bank_started_at" not in st.session_state:
-    reset_clock()
 if "bank_speed" not in st.session_state:
     st.session_state.bank_speed = 4.0
 
 st.title("Community Bank — Branch Simulation")
+day_column, teller_column = st.columns(2)
+selected_day = day_column.selectbox(
+    "Simulation date in January",
+    options=range(1, 32),
+    format_func=lambda day: f"January {day}",
+)
+selected_teller_count = teller_column.selectbox(
+    "Number of tellers",
+    options=(2, 3),
+    index=1,
+)
+
 st.caption(
     "Random arrivals every 3 minutes on average · Exponential service time "
-    f"of 4 minutes · {TELLER_COUNT} tellers · One first-come, first-served queue"
+    f"of 4 minutes · {selected_teller_count} tellers · "
+    "One first-come, first-served queue"
+)
+
+st.subheader("Test the random numbers too")
+st.plotly_chart(arrival_comparison_chart(), use_container_width=True)
+st.caption(
+    "January 1 has the same arrival times with 2 or 3 tellers. "
+    "January 31 uses a different, repeatable arrival schedule."
+)
+
+simulation_config = (selected_day, selected_teller_count)
+if st.session_state.get("bank_config") != simulation_config:
+    st.session_state.bank_config = simulation_config
+    reset_clock()
+result: SimulationResult = simulate_bank(
+    seed=selected_day,
+    teller_count=selected_teller_count,
 )
 
 
@@ -189,7 +259,7 @@ def simulation_panel() -> None:
         st.session_state.bank_started_at = time.monotonic()
         st.session_state.bank_speed = speed
 
-    teller_columns = st.columns(TELLER_COUNT)
+    teller_columns = st.columns(selected_teller_count)
     for index, column in enumerate(teller_columns):
         busy = elapsed_busy[index] / OPEN_MINUTES * 100
         column.progress(

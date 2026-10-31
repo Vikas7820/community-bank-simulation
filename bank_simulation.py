@@ -31,6 +31,7 @@ class SimulationResult:
     teller_busy_minutes: tuple[float, ...]
     average_wait: float
     worst_wait: float
+    arrival_times: tuple[float, ...]
 
     @property
     def served_count(self) -> int:
@@ -57,24 +58,40 @@ class SimulationResult:
                 for customer in self.customers
                 if customer.teller == teller
             )
-            for teller in range(TELLER_COUNT)
+            for teller in range(len(self.teller_busy_minutes))
         )
 
 
-def simulate_bank(seed: int = 42) -> SimulationResult:
-    """Simulate one open day, then let all customers who arrived before closing finish."""
+def arrival_times_for_day(seed: int) -> tuple[float, ...]:
+    """Return a reproducible arrival schedule independent of teller count."""
     rng = random.Random(seed)
+    arrivals: list[float] = []
+    minute = 0.0
+    while True:
+        minute += rng.expovariate(1 / MEAN_INTERARRIVAL_MINUTES)
+        if minute >= OPEN_MINUTES:
+            break
+        arrivals.append(minute)
+    return tuple(arrivals)
+
+
+def simulate_bank(seed: int = 42, teller_count: int = TELLER_COUNT) -> SimulationResult:
+    """Simulate one open day, then let all customers who arrived before closing finish."""
+    if teller_count < 1:
+        raise ValueError("teller_count must be at least 1")
+
     env = simpy.Environment()
-    tellers = simpy.Resource(env, capacity=TELLER_COUNT)
+    tellers = simpy.Resource(env, capacity=teller_count)
     completed: list[Customer] = []
-    customer_id = 0
+    arrival_schedule = arrival_times_for_day(seed)
+    service_rng = random.Random(seed ^ 0x5EED5EED)
 
     def customer_process(identifier: int, arrival: float):
         with tellers.request() as request:
             yield request
             service_start = env.now
             teller = tellers.users.index(request)
-            service_duration = rng.expovariate(1 / MEAN_SERVICE_MINUTES)
+            service_duration = service_rng.expovariate(1 / MEAN_SERVICE_MINUTES)
             yield env.timeout(service_duration)
             completed.append(
                 Customer(
@@ -86,16 +103,12 @@ def simulate_bank(seed: int = 42) -> SimulationResult:
                 )
             )
 
-    def arrivals():
-        nonlocal customer_id
-        while True:
-            yield env.timeout(rng.expovariate(1 / MEAN_INTERARRIVAL_MINUTES))
-            if env.now >= OPEN_MINUTES:
-                return
-            customer_id += 1
-            env.process(customer_process(customer_id, env.now))
+    def generate_arrivals():
+        for customer_id, arrival in enumerate(arrival_schedule, start=1):
+            yield env.timeout(arrival - env.now)
+            env.process(customer_process(customer_id, arrival))
 
-    env.process(arrivals())
+    env.process(generate_arrivals())
     env.run()
     completed.sort(key=lambda customer: customer.customer_id)
 
@@ -113,7 +126,7 @@ def simulate_bank(seed: int = 42) -> SimulationResult:
             for customer in completed
             if customer.teller == teller
         )
-        for teller in range(TELLER_COUNT)
+        for teller in range(teller_count)
     )
 
     return SimulationResult(
@@ -121,4 +134,5 @@ def simulate_bank(seed: int = 42) -> SimulationResult:
         teller_busy_minutes=teller_busy_minutes,
         average_wait=average_wait,
         worst_wait=worst_wait,
+        arrival_times=arrival_schedule,
     )
